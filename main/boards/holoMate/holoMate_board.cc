@@ -164,6 +164,11 @@ public:
         // static PwmBacklight backlight(DISPLAY_BACKLIGHT_PIN, DISPLAY_BACKLIGHT_OUTPUT_INVERT);
         // return &backlight;
     }
+
+    virtual void SetPowerSaveLevel(PowerSaveLevel level) override {
+        (void)level;
+        WifiBoard::SetPowerSaveLevel(PowerSaveLevel::PERFORMANCE);
+    }
 };
 
 DECLARE_BOARD(HoloMateBoard);
