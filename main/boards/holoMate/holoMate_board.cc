@@ -150,7 +150,8 @@ public:
             AUDIO_CODEC_PA_PIN,
             AUDIO_CODEC_ES8311_ADDR,
             AUDIO_CODEC_ES7210_ADDR,
-            AUDIO_INPUT_REFERENCE);
+            AUDIO_INPUT_REFERENCE,
+            37.5f);  // HoloMate 实机验证的麦克风模拟增益
         return &audio_codec;
     }
 
