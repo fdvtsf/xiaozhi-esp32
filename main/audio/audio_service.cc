@@ -2,6 +2,10 @@
 #include <esp_log.h>
 #include <cstring>
 
+#if CONFIG_AUDIO_DIAGNOSTICS
+#include "diagnostics/audio_diagnostics.h"
+#endif
+
 #define RATE_CVT_CFG(_src_rate, _dest_rate, _channel)        \
     (esp_ae_rate_cvt_cfg_t)                                  \
     {                                                        \
@@ -35,6 +39,9 @@ AudioService::AudioService() {
 }
 
 AudioService::~AudioService() {
+#if CONFIG_AUDIO_DIAGNOSTICS
+    AudioDiagnostics::GetInstance().Shutdown();
+#endif
     if (event_group_ != nullptr) {
         vEventGroupDelete(event_group_);
     }
@@ -55,6 +62,10 @@ AudioService::~AudioService() {
 void AudioService::Initialize(AudioCodec* codec) {
     codec_ = codec;
     codec_->Start();
+
+#if CONFIG_AUDIO_DIAGNOSTICS
+    AudioDiagnostics::GetInstance().Initialize();
+#endif
 
     esp_opus_dec_cfg_t opus_dec_cfg = OPUS_DEC_CFG(codec->output_sample_rate(), OPUS_FRAME_DURATION_MS);
     auto ret = esp_opus_dec_open(&opus_dec_cfg, sizeof(esp_opus_dec_cfg_t), &opus_decoder_);
@@ -91,16 +102,28 @@ void AudioService::Initialize(AudioCodec* codec) {
     audio_engine_ = std::make_unique<LiteAudioEngine>();
 #endif
     audio_engine_->OnOutput([this](std::vector<int16_t>&& data) {
+#if CONFIG_AUDIO_DIAGNOSTICS
+        AudioDiagnostics::GetInstance().CapturePcm(
+            AudioDiagnosticStream::UplinkPcm, data.data(), data.size(), 16000, 1);
+#endif
         PushTaskToEncodeQueue(kAudioTaskTypeEncodeToSendQueue, std::move(data));
     });
     audio_engine_->OnVadStateChange([this](bool speaking) {
         voice_detected_ = speaking;
+#if CONFIG_AUDIO_DIAGNOSTICS
+        AudioDiagnostics::GetInstance().CaptureEvent(
+            AudioDiagnosticEvent::VadState, speaking ? 1 : 0);
+#endif
         if (callbacks_.on_vad_change) {
             callbacks_.on_vad_change(speaking);
         }
     });
     audio_engine_->OnWakeWordDetected([this](const std::string& wake_word) {
         xEventGroupClearBits(event_group_, AS_EVENT_WAKE_WORD_RUNNING);
+#if CONFIG_AUDIO_DIAGNOSTICS
+        AudioDiagnostics::GetInstance().CaptureEvent(
+            AudioDiagnosticEvent::WakeWordDetected, 1);
+#endif
         if (callbacks_.on_wake_word_detected) {
             callbacks_.on_wake_word_detected(wake_word);
         }
@@ -199,6 +222,11 @@ bool AudioService::ReadAudioData(std::vector<int16_t>& data, int sample_rate, in
         if (!codec_->InputData(data)) {
             return false;
         }
+#if CONFIG_AUDIO_DIAGNOSTICS
+        AudioDiagnostics::GetInstance().CapturePcm(
+            AudioDiagnosticStream::CodecInput, data.data(), data.size(),
+            codec_->input_sample_rate(), codec_->input_channels());
+#endif
         if (input_resampler_ != nullptr) {
             std::lock_guard<std::mutex> lock(input_resampler_mutex_);
             uint32_t in_sample_num = data.size() / codec_->input_channels();
@@ -216,6 +244,11 @@ bool AudioService::ReadAudioData(std::vector<int16_t>& data, int sample_rate, in
         if (!codec_->InputData(data)) {
             return false;
         }
+#if CONFIG_AUDIO_DIAGNOSTICS
+        AudioDiagnostics::GetInstance().CapturePcm(
+            AudioDiagnosticStream::CodecInput, data.data(), data.size(),
+            codec_->input_sample_rate(), codec_->input_channels());
+#endif
     }
 
     /* Update the last input time */
@@ -333,6 +366,11 @@ void AudioService::AudioOutputTask() {
             codec_->EnableOutput(true);
         }
 
+#if CONFIG_AUDIO_DIAGNOSTICS
+        AudioDiagnostics::GetInstance().CapturePcm(
+            AudioDiagnosticStream::PlaybackPcm, task->pcm.data(), task->pcm.size(),
+            codec_->output_sample_rate(), 1);
+#endif
         codec_->OutputData(task->pcm);
 
         /* Update the last output time */

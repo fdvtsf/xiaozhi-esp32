@@ -1,6 +1,5 @@
 # Define source files
 set(SOURCES "audio/audio_codec.cc"
-            "audio/audio_debugger.cc"
             "audio/audio_service.cc"
             "audio/demuxer/ogg_demuxer.cc"
             "audio/codecs/no_audio_codec.cc"
@@ -41,6 +40,14 @@ set(SOURCES "audio/audio_codec.cc"
             "assets.cc"
             "main.cc"
             )
+
+if(CONFIG_AUDIO_DIAGNOSTICS)
+    list(APPEND SOURCES "audio/diagnostics/audio_diagnostics.cc")
+endif()
+
+if(CONFIG_USE_AUDIO_DEBUGGER)
+    list(APPEND SOURCES "audio/audio_debugger.cc")
+endif()
 
 set(INCLUDE_DIRS "." "display" "display/lvgl_display" "display/lvgl_display/jpg" "audio" "audio/demuxer" "protocols")
 

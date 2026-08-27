@@ -915,6 +915,41 @@ config USE_AUDIO_DEBUGGER
     help
         Enable audio debugger, send audio data through UDP to the host machine
 
+config AUDIO_DIAGNOSTICS
+    bool "Enable multi-tap audio diagnostics"
+    default n
+    depends on SPIRAM
+    help
+        Compile the multi-tap audio diagnostics framework. When disabled, the
+        implementation and every capture hook are removed at compile time, so
+        no task, buffer, socket, branch, or runtime data is retained.
+
+if AUDIO_DIAGNOSTICS
+
+config AUDIO_DIAGNOSTICS_UDP_SERVER
+    string "Audio diagnostics UDP target"
+    default "192.168.2.100:8000"
+    help
+        IPv4 address and UDP port of scripts/audio_diagnostics_receiver.py.
+
+config AUDIO_DIAGNOSTICS_SLOT_COUNT
+    int "Audio diagnostics PSRAM slot count"
+    range 4 64
+    default 16
+    help
+        Number of fixed-size, non-blocking capture slots allocated in PSRAM.
+
+config AUDIO_DIAGNOSTICS_MAX_PAYLOAD_BYTES
+    int "Maximum audio diagnostics UDP payload bytes"
+    range 512 1400
+    default 1200
+    help
+        Maximum payload per datagram. PCM blocks larger than this value are
+        split without allocation. Keep this at or below 1400 to avoid IP
+        fragmentation on common Wi-Fi networks.
+
+endif
+
 menu "WiFi Configuration Method"
     help
         WiFi Configuration Method Selection

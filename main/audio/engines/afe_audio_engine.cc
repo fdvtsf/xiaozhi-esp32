@@ -12,6 +12,10 @@
 #include "audio_service.h"
 #include "wake_words/custom_wake_word.h"
 
+#if CONFIG_AUDIO_DIAGNOSTICS
+#include "diagnostics/audio_diagnostics.h"
+#endif
+
 #define TAG "AfeAudioEngine"
 
 #if CONFIG_USE_AUDIO_PROCESSOR
@@ -231,6 +235,10 @@ void AfeAudioEngine::EnableWakeWordDetection(bool enable) {
         }
     }
     UpdateActiveState();
+#if CONFIG_AUDIO_DIAGNOSTICS
+    AudioDiagnostics::GetInstance().CaptureEvent(
+        AudioDiagnosticEvent::WakeWordState, enable ? 1 : 0);
+#endif
 }
 
 void AfeAudioEngine::EnableVoiceProcessing(bool enable) {
@@ -241,6 +249,10 @@ void AfeAudioEngine::EnableVoiceProcessing(bool enable) {
         is_speaking_ = false;
     }
     UpdateActiveState();
+#if CONFIG_AUDIO_DIAGNOSTICS
+    AudioDiagnostics::GetInstance().CaptureEvent(
+        AudioDiagnosticEvent::VoiceProcessingState, enable ? 1 : 0);
+#endif
 }
 
 void AfeAudioEngine::EnableDeviceAec(bool enable) {
@@ -331,6 +343,10 @@ void AfeAudioEngine::ApplyAfeControls() {
         } else {
             afe_iface_->disable_aec(afe_data_);
         }
+#if CONFIG_AUDIO_DIAGNOSTICS
+        AudioDiagnostics::GetInstance().CaptureEvent(
+            AudioDiagnosticEvent::AecState, enable_aec ? 1 : 0);
+#endif
     }
 }
 
@@ -372,6 +388,11 @@ void AfeAudioEngine::ProcessingTask() {
             }
             continue;
         }
+#if CONFIG_AUDIO_DIAGNOSTICS
+        AudioDiagnostics::GetInstance().CapturePcm(
+            AudioDiagnosticStream::AfeOutput, result->data,
+            result->data_size / sizeof(int16_t), 16000, 1);
+#endif
 
         EventBits_t bits = xEventGroupGetBits(event_group_);
         if (bits & kWakeWordEnabled) {

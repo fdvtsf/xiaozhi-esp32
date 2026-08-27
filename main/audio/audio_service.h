@@ -20,9 +20,12 @@
 #include "esp_audio_types.h"
 
 #include "audio_codec.h"
-#include "audio_debugger.h"
 #include "audio_engine.h"
 #include "protocol.h"
+
+#if CONFIG_USE_AUDIO_DEBUGGER
+#include "audio_debugger.h"
+#endif
 #include "ogg_demuxer.h"
 
 /*
@@ -141,7 +144,9 @@ private:
     AudioCodec* codec_ = nullptr;
     AudioServiceCallbacks callbacks_;
     std::unique_ptr<AudioEngine> audio_engine_;
+#if CONFIG_USE_AUDIO_DEBUGGER
     std::unique_ptr<AudioDebugger> audio_debugger_;
+#endif
     void* opus_encoder_ = nullptr;
     void* opus_decoder_ = nullptr;
     std::mutex decoder_mutex_;
