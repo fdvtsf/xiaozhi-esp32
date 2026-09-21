@@ -146,6 +146,9 @@ private:
     bool assets_version_checked_ = false;
     bool play_popup_on_listening_ = false;  // Flag to play popup sound after state changes to listening
     bool pending_listening_start_ = false;  // Waiting for playback to drain before starting listening (auto mode)
+    bool conversation_recovery_pending_ = false;
+    ListeningMode recovery_listening_mode_ = kListeningModeAutoStop;
+    DeviceState recovery_previous_state_ = kDeviceStateIdle;
     int clock_ticks_ = 0;
     TaskHandle_t activation_task_handle_ = nullptr;
 
@@ -157,6 +160,9 @@ private:
     void HandleStopListeningEvent();
     void HandleNetworkConnectedEvent();
     void HandleNetworkDisconnectedEvent();
+    void HandleProtocolConnected();
+    void HandleProtocolDisconnected();
+    void ContinueConversationRecovery();
     void HandleActivationDoneEvent();
     void HandleWakeWordDetectedEvent();
     void ContinueOpenAudioChannel(ListeningMode mode);

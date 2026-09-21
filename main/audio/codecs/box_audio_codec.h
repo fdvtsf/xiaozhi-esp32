@@ -6,7 +6,13 @@
 #include <esp_codec_dev.h>
 #include <esp_codec_dev_defaults.h>
 #include <mutex>
+#include <vector>
 
+struct BoxAudioCodecInputLayout {
+    int mic1_slot = 0;
+    int mic2_slot = -1;
+    int reference_slot = 1;
+};
 
 class BoxAudioCodec : public AudioCodec {
 private:
@@ -22,7 +28,13 @@ private:
     std::mutex data_if_mutex_;
     int reference_gain_channel_ = -1;
     float reference_gain_ = 0.0f;
+    BoxAudioCodecInputLayout input_layout_;
+    uint8_t mic_selected_ = 0;
+    uint16_t input_slot_mask_ = 0;
+    bool read_all_tdm_slots_ = false;
+    std::vector<int16_t> tdm_slot_buffer_;
 
+    void ResetOutputCodec();
     void CreateDuplexChannels(gpio_num_t mclk, gpio_num_t bclk, gpio_num_t ws, gpio_num_t dout,
                               gpio_num_t din);
 
@@ -34,7 +46,8 @@ public:
                   gpio_num_t mclk, gpio_num_t bclk, gpio_num_t ws, gpio_num_t dout, gpio_num_t din,
                   gpio_num_t pa_pin, uint8_t es8311_addr, uint8_t es7210_addr, bool input_reference,
                   float input_gain = 30.0f, int reference_gain_channel = -1,
-                  float reference_gain = 0.0f);
+                  float reference_gain = 0.0f,
+                  BoxAudioCodecInputLayout input_layout = BoxAudioCodecInputLayout{});
     virtual ~BoxAudioCodec();
 
     virtual void SetOutputVolume(int volume) override;
@@ -42,4 +55,4 @@ public:
     virtual void EnableOutput(bool enable) override;
 };
 
-#endif // _BOX_AUDIO_CODEC_H
+#endif  // _BOX_AUDIO_CODEC_H

@@ -2,6 +2,9 @@
 #include "assets.h"
 #include "assets/lang_config.h"
 #include "audio_codec.h"
+#if CONFIG_AUDIO_DIAGNOSTICS
+#include "audio_diagnostics.h"
+#endif
 #include "board.h"
 #include "display.h"
 #include "mcp_server.h"
@@ -259,6 +262,11 @@ void Application::Run() {
 
         if (bits & MAIN_EVENT_CLOCK_TICK) {
             clock_ticks_++;
+#if CONFIG_AUDIO_DIAGNOSTICS
+            AudioDiagnostics::Get().PrintIfDue(DeviceStateMachine::GetStateName(GetDeviceState()),
+                                               audio_service_.IsWakeWordRunning(),
+                                               audio_service_.IsAudioProcessorRunning());
+#endif
             auto display = Board::GetInstance().GetDisplay();
             display->UpdateStatusBar();
 
@@ -433,11 +441,22 @@ void Application::CheckNewVersion() {
             }
 
             char error_message[128];
-            snprintf(error_message, sizeof(error_message), "code=%d, url=%s", err,
-                     ota_->GetCheckVersionUrl().c_str());
-            char buffer[256];
-            snprintf(buffer, sizeof(buffer), Lang::Strings::CHECK_NEW_VERSION_FAILED, retry_delay,
-                     error_message);
+            int error_message_length =
+                snprintf(error_message, sizeof(error_message), "code=%d, url=%s", err,
+                         ota_->GetCheckVersionUrl().c_str());
+            if (error_message_length < 0 ||
+                error_message_length >= static_cast<int>(sizeof(error_message))) {
+                snprintf(error_message, sizeof(error_message), "code=%d", err);
+            }
+
+            char buffer[320];
+            int alert_message_length =
+                snprintf(buffer, sizeof(buffer), Lang::Strings::CHECK_NEW_VERSION_FAILED,
+                         retry_delay, error_message);
+            if (alert_message_length < 0 ||
+                alert_message_length >= static_cast<int>(sizeof(buffer))) {
+                snprintf(buffer, sizeof(buffer), "code=%d", err);
+            }
             Alert(Lang::Strings::ERROR, buffer, "cloud_off", Lang::Sounds::OGG_EXCLAMATION);
 
             ESP_LOGW(TAG, "Check new version failed, retry in %d seconds (%d/%d)", retry_delay,
@@ -508,7 +527,13 @@ void Application::InitializeProtocol() {
         protocol_ = std::make_unique<MqttProtocol>();
     }
 
-    protocol_->OnConnected([this]() { DismissAlert(); });
+    protocol_->OnConnected([this]() {
+        Schedule([this]() { HandleProtocolConnected(); });
+    });
+
+    protocol_->OnDisconnected([this]() {
+        Schedule([this]() { HandleProtocolDisconnected(); });
+    });
 
     protocol_->OnNetworkError([this](const std::string& message) {
         last_error_message_ = message;
@@ -652,6 +677,70 @@ void Application::InitializeProtocol() {
     protocol_->Start();
 }
 
+void Application::HandleProtocolDisconnected() {
+    auto state = GetDeviceState();
+    if (state != kDeviceStateListening && state != kDeviceStateSpeaking) {
+        return;
+    }
+
+    conversation_recovery_pending_ = true;
+    recovery_listening_mode_ = listening_mode_;
+    recovery_previous_state_ = state;
+    ESP_LOGW(TAG, "Conversation transport disconnected in %s; recovery armed (mode=%d)",
+             DeviceStateMachine::GetStateName(state), static_cast<int>(listening_mode_));
+}
+
+void Application::HandleProtocolConnected() {
+    DismissAlert();
+
+    if (!conversation_recovery_pending_) {
+        return;
+    }
+
+    auto state = GetDeviceState();
+    if (state != kDeviceStateIdle) {
+        ESP_LOGW(TAG, "Cannot start conversation recovery from state %s",
+                 DeviceStateMachine::GetStateName(state));
+        conversation_recovery_pending_ = false;
+        return;
+    }
+
+    ESP_LOGI(TAG, "MQTT transport restored; reopening conversation automatically");
+    if (!SetDeviceState(kDeviceStateConnecting)) {
+        conversation_recovery_pending_ = false;
+        return;
+    }
+
+    // Run after the Connecting state has been rendered. OpenAudioChannel waits
+    // for the server hello, so it must never run in the MQTT callback task.
+    Schedule([this]() { ContinueConversationRecovery(); });
+}
+
+void Application::ContinueConversationRecovery() {
+    if (!conversation_recovery_pending_ || GetDeviceState() != kDeviceStateConnecting) {
+        return;
+    }
+
+    auto& board = Board::GetInstance();
+    board.SetPowerSaveLevel(PowerSaveLevel::PERFORMANCE);
+
+    if (!protocol_ || !protocol_->OpenAudioChannel()) {
+        ESP_LOGE(TAG, "Conversation recovery failed; wake word mode remains available");
+        conversation_recovery_pending_ = false;
+        SetDeviceState(kDeviceStateIdle);
+        return;
+    }
+
+    auto recovered_mode = recovery_listening_mode_;
+    auto interrupted_state = recovery_previous_state_;
+    conversation_recovery_pending_ = false;
+    play_popup_on_listening_ = false;
+    ESP_LOGI(TAG, "Conversation recovered automatically: interrupted=%s, mode=%d",
+             DeviceStateMachine::GetStateName(interrupted_state),
+             static_cast<int>(recovered_mode));
+    SetListeningMode(recovered_mode);
+}
+
 void Application::ShowActivationCode(const std::string& code, const std::string& message) {
     struct digit_sound {
         char digit;
@@ -705,6 +794,9 @@ void Application::StopListening() { xEventGroupSetBits(event_group_, MAIN_EVENT_
 
 void Application::HandleToggleChatEvent() {
     auto state = GetDeviceState();
+
+    // Explicit user input supersedes any pending automatic recovery.
+    conversation_recovery_pending_ = false;
 
     if (state == kDeviceStateActivating) {
         SetDeviceState(kDeviceStateIdle);
@@ -765,6 +857,8 @@ void Application::ContinueOpenAudioChannel(ListeningMode mode) {
 void Application::HandleStartListeningEvent() {
     auto state = GetDeviceState();
 
+    conversation_recovery_pending_ = false;
+
     if (state == kDeviceStateActivating) {
         SetDeviceState(kDeviceStateIdle);
         return;
@@ -795,6 +889,8 @@ void Application::HandleStartListeningEvent() {
 
 void Application::HandleStopListeningEvent() {
     auto state = GetDeviceState();
+
+    conversation_recovery_pending_ = false;
 
     if (state == kDeviceStateAudioTesting) {
         audio_service_.EnableAudioTesting(false);
@@ -844,6 +940,8 @@ void Application::HandleWakeWordDetectedEvent() {
 
 void Application::BeginWakeWordInvoke(const std::string& wake_word) {
     // Must run in the main task with the device in idle state
+    // A fresh wake word is authoritative and replaces a pending reconnect.
+    conversation_recovery_pending_ = false;
     audio_service_.EncodeWakeWord();
 
     // Always pass through the connecting state, even if the audio channel is
@@ -914,6 +1012,14 @@ void Application::HandleStateChangedEvent() {
     auto display = board.GetDisplay();
     auto led = board.GetLed();
     led->OnStateChanged();
+
+#if CONFIG_DISABLE_AEC_DURING_IDLE_WAKE
+    // AEC/NLP can color quiet near-end speech. It is unnecessary while Idle
+    // because no application audio is playing, but is restored for every other
+    // state before listening or speaking begins.
+    audio_service_.EnableWakeWordAec(new_state != kDeviceStateIdle &&
+                                     new_state != kDeviceStateUnknown);
+#endif
 
     switch (new_state) {
         case kDeviceStateUnknown:

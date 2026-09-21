@@ -19,7 +19,7 @@
 #include <atomic>
 
 #define MQTT_PING_INTERVAL_SECONDS 90
-#define MQTT_RECONNECT_INTERVAL_MS 60000
+#define MQTT_RECONNECT_INTERVAL_MS 2000
 
 #define MQTT_PROTOCOL_SERVER_HELLO_EVENT (1 << 0)
 
@@ -55,6 +55,9 @@ private:
     esp_timer_handle_t reconnect_timer_;
 
     bool StartMqttClient(bool report_error=false);
+    void HandleMqttDisconnected();
+    void ScheduleReconnect();
+    void CancelReconnect();
     void ParseServerHello(const cJSON* root);
     bool DecodeHexString(const std::string& hex_string, std::string& decoded);
     bool CryptAesCtr(const uint8_t* input, size_t input_size, const uint8_t* nonce, uint8_t* output);

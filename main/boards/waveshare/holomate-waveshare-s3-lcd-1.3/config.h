@@ -5,7 +5,10 @@
 #define AUDIO_INPUT_SAMPLE_RATE 24000
 #define AUDIO_OUTPUT_SAMPLE_RATE 24000
 #define AUDIO_INPUT_REFERENCE true
-#define AUDIO_INPUT_GAIN_DB 37.5f
+#define AUDIO_INPUT_GAIN_DB 36.0f
+#define AUDIO_INPUT_MIC1_SLOT 0
+#define AUDIO_INPUT_MIC2_SLOT 2
+#define AUDIO_INPUT_REFERENCE_SLOT 1
 
 #define AUDIO_I2S_GPIO_MCLK GPIO_NUM_11
 #define AUDIO_I2S_GPIO_BCLK GPIO_NUM_10
@@ -35,10 +38,11 @@
 #define DISPLAY_WIDTH 240
 #define DISPLAY_HEIGHT 240
 
-// Factory demo's Normal orientation: MADCTL=0xC0, visible rows 80..319.
-#define DISPLAY_MIRROR_X true
+// Rotate the factory orientation clockwise by 90 degrees in the ST7789
+// controller. Swapping axes also moves the 80-pixel RAM offset from Y to X.
+#define DISPLAY_MIRROR_X false
 #define DISPLAY_MIRROR_Y true
-#define DISPLAY_SWAP_XY false
-#define DISPLAY_OFFSET_X 0
-#define DISPLAY_OFFSET_Y 80
+#define DISPLAY_SWAP_XY true
+#define DISPLAY_OFFSET_X 80
+#define DISPLAY_OFFSET_Y 0
 #define DISPLAY_INVERT_COLOR true

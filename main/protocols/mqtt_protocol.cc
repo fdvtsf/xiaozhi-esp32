@@ -19,15 +19,22 @@ MqttProtocol::MqttProtocol() {
             [](void* arg) {
                 MqttProtocol* protocol = (MqttProtocol*)arg;
                 auto& app = Application::GetInstance();
-                if (app.GetDeviceState() == kDeviceStateIdle) {
+                auto alive = protocol->alive_;  // Capture alive flag
+                app.Schedule([protocol, alive]() {
+                    if (!*alive) {
+                        return;
+                    }
+                    if (protocol->mqtt_ != nullptr && protocol->mqtt_->IsConnected()) {
+                        return;
+                    }
+
                     ESP_LOGI(TAG, "Reconnecting to MQTT server");
-                    auto alive = protocol->alive_;  // Capture alive flag
-                    app.Schedule([protocol, alive]() {
-                        if (*alive) {
-                            protocol->StartMqttClient(false);
-                        }
-                    });
-                }
+                    if (!protocol->StartMqttClient(false)) {
+                        ESP_LOGW(TAG, "MQTT reconnect failed, retrying in %d ms",
+                                 MQTT_RECONNECT_INTERVAL_MS);
+                        protocol->ScheduleReconnect();
+                    }
+                });
             },
         .arg = this,
     };
@@ -94,20 +101,13 @@ bool MqttProtocol::StartMqttClient(bool report_error) {
     mqtt_ = network->CreateMqtt(0);
     mqtt_->SetKeepAlive(keepalive_interval);
 
-    mqtt_->OnDisconnected([this]() {
-        if (on_disconnected_ != nullptr) {
-            on_disconnected_();
-        }
-        ESP_LOGI(TAG, "MQTT disconnected, schedule reconnect in %d seconds",
-                 MQTT_RECONNECT_INTERVAL_MS / 1000);
-        esp_timer_start_once(reconnect_timer_, MQTT_RECONNECT_INTERVAL_MS * 1000);
-    });
+    mqtt_->OnDisconnected([this]() { HandleMqttDisconnected(); });
 
     mqtt_->OnConnected([this]() {
         if (on_connected_ != nullptr) {
             on_connected_();
         }
-        esp_timer_stop(reconnect_timer_);
+        CancelReconnect();
     });
 
     mqtt_->OnMessage([this](const std::string& topic, const std::string& payload) {
@@ -163,6 +163,57 @@ bool MqttProtocol::StartMqttClient(bool report_error) {
 
     ESP_LOGI(TAG, "Connected to endpoint");
     return true;
+}
+
+void MqttProtocol::HandleMqttDisconnected() {
+    if (on_disconnected_ != nullptr) {
+        on_disconnected_();
+    }
+
+    // The MQTT callback runs outside the application task. Close the UDP audio
+    // channel there so OnAudioChannelClosed can return Speaking/Listening to
+    // Idle before the reconnect timer fires. Do not send goodbye over an
+    // already disconnected MQTT transport.
+    auto alive = alive_;
+    Application::GetInstance().Schedule([this, alive]() {
+        if (*alive) {
+            ESP_LOGI(TAG, "Closing audio channel after MQTT disconnection");
+            CloseAudioChannel(false);
+        }
+    });
+
+    ESP_LOGI(TAG, "MQTT disconnected, schedule reconnect in %d ms",
+             MQTT_RECONNECT_INTERVAL_MS);
+    ScheduleReconnect();
+}
+
+void MqttProtocol::ScheduleReconnect() {
+    if (reconnect_timer_ == nullptr) {
+        ESP_LOGE(TAG, "MQTT reconnect timer is not initialized");
+        return;
+    }
+
+    esp_err_t stop_err = esp_timer_stop(reconnect_timer_);
+    if (stop_err != ESP_OK && stop_err != ESP_ERR_INVALID_STATE) {
+        ESP_LOGW(TAG, "Failed to stop MQTT reconnect timer: %s", esp_err_to_name(stop_err));
+    }
+
+    esp_err_t start_err =
+        esp_timer_start_once(reconnect_timer_, MQTT_RECONNECT_INTERVAL_MS * 1000ULL);
+    if (start_err != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to start MQTT reconnect timer: %s", esp_err_to_name(start_err));
+    }
+}
+
+void MqttProtocol::CancelReconnect() {
+    if (reconnect_timer_ == nullptr) {
+        return;
+    }
+
+    esp_err_t err = esp_timer_stop(reconnect_timer_);
+    if (err != ESP_OK && err != ESP_ERR_INVALID_STATE) {
+        ESP_LOGW(TAG, "Failed to cancel MQTT reconnect timer: %s", esp_err_to_name(err));
+    }
 }
 
 bool MqttProtocol::SendText(const std::string& text) {

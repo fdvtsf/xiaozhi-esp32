@@ -882,6 +882,16 @@ config WAKE_WORD_DETECTION_IN_LISTENING
         which allows interrupting the current conversation.
         When disabled (default), wake word detection is turned off during listening.
 
+config DISABLE_AEC_DURING_IDLE_WAKE
+    bool "Disable AEC while waiting for a wake word in Idle"
+    default n
+    depends on USE_DEVICE_AEC && USE_AFE_WAKE_WORD
+    help
+        Keep the microphone path free of AEC/NLP processing while the device is
+        idle and the speaker is silent. AEC is restored before listening or
+        speaking. This can preserve wake-word speech, but must remain disabled
+        on boards that need echo-safe wake detection during local playback.
+
 config USE_AUDIO_PROCESSOR
     bool "Enable AFE Audio Processing"
     default y
@@ -911,6 +921,44 @@ config USE_SERVER_AEC
     depends on USE_AUDIO_PROCESSOR
     help
         To work perperly, server-side AEC requires server support
+
+config AUDIO_DIAGNOSTICS
+    bool "Enable compile-time audio diagnostics"
+    default n
+    depends on IDF_TARGET_ESP32S3 || IDF_TARGET_ESP32P4
+    help
+        Compile in reusable PCM level, pipeline progress and optional PCM stream
+        diagnostics. This option adds runtime overhead when enabled. When disabled,
+        the diagnostic source and every call site are removed at compile time.
+
+if AUDIO_DIAGNOSTICS
+
+config AUDIO_DIAGNOSTIC_PCM_UDP
+    bool "Stream PCM diagnostic points to a UDP receiver"
+    default n
+    help
+        Stream codec input, resampled AFE input and AFE output PCM using tagged
+        UDP packets. A three-channel HoloMate codec input is written as interleaved
+        Mic1/Mic2/Ref plus separate mono WAV files. Packets are dropped rather than
+        blocking an audio task.
+
+config AUDIO_DIAGNOSTIC_TDM_SLOTS
+    bool "Capture all four ES7210 TDM slots"
+    default n
+    depends on AUDIO_DIAGNOSTIC_PCM_UDP && BOARD_TYPE_HOLOMATE_WAVESHARE_S3_LCD_1_3
+    help
+        Diagnostic firmware only: also stream the four physical ES7210 TDM slots
+        as a separate PCM point. The HoloMate production path extracts slot 0,
+        slot 2 and slot 1, then reorders them as Mic1/Mic2/Ref before AFE.
+
+config AUDIO_DIAGNOSTIC_UDP_SERVER
+    string "Audio diagnostic UDP receiver"
+    default "192.168.2.100:8010"
+    depends on AUDIO_DIAGNOSTIC_PCM_UDP
+    help
+        UDP receiver address in IPv4:port format.
+
+endif
 
 config USE_AUDIO_DEBUGGER
     bool "Enable Audio Debugger"

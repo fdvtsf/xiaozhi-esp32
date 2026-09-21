@@ -15,12 +15,14 @@ class AudioEngine {
 public:
     virtual ~AudioEngine() = default;
 
-    virtual bool Initialize(AudioCodec* codec, int frame_duration_ms, srmodel_list_t* models_list) = 0;
+    virtual bool Initialize(AudioCodec* codec, int frame_duration_ms,
+                            srmodel_list_t* models_list) = 0;
     virtual void Feed(std::vector<int16_t>&& data) = 0;
 
     virtual void EnableWakeWordDetection(bool enable) = 0;
     virtual void EnableVoiceProcessing(bool enable) = 0;
     virtual void EnableDeviceAec(bool enable) = 0;
+    virtual void EnableWakeWordAec(bool enable) {}
 
     virtual bool HasWakeWord() const = 0;
     virtual bool IsWakeWordDetectionEnabled() const = 0;

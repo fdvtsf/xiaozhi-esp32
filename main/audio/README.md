@@ -19,9 +19,27 @@ that instance, so enabling both no longer creates two AFE pipelines. For custom
 MultiNet wake words, AFE fetch output is passed to `CustomWakeWord`; MultiNet is
 not created on the smaller targets.
 
-The AFE configuration currently uses `FD_LOW_COST` AEC with
-`AEC_NLP_LEVEL_VERYAGGR`. WebRTC/NSNet noise suppression is intentionally
-disabled because the project does not ship an NSNet model.
+The MMR (two microphones plus reference) path selects `AFE_TYPE_FD` and
+`AFE_MODE_LOW_COST`, retaining the ESP-SR profile's AEC/SE defaults.
+The current MMR A/B test explicitly sets `AEC_NLP_LEVEL_NORMAL`, replacing
+the previously observed `AGGR` default; no other acoustic settings change.
+Other input layouts use the existing VC/HIGH_PERF profile with
+`AEC_MODE_VOIP_HIGH_PERF` and `AEC_NLP_LEVEL_NORMAL` overrides.
+Standalone NS and AGC are explicitly disabled. Do not infer current MMR NLP
+strength from older single-microphone tuning or documentation.
+
+At initialization, `AFE init config` logs AEC mode, NLP level, filter length,
+and AEC/SE/NS/AGC flags from the configuration object after creation. These
+are configuration values, not later runtime enable/disable state; the existing
+`print_pipeline` output describes the created graph. No acoustic settings are
+changed by this logging.
+
+Before starting its fetch task, the engine verifies that the AFE reports
+16 kHz, the codec's interleaved channel count, and positive feed/fetch frame
+lengths. A mismatch destroys the instance and fails initialization. Codec
+capture may still run at 24 kHz: `AudioService` resamples all input channels
+before feeding AFE. These checks and logs run only during initialization,
+independently of the disabled PCM-dump and periodic-diagnostic features.
 
 When wake-word audio upload is enabled, the most recent two seconds of PCM are
 stored in a single 64 KB PSRAM ring buffer. WakeNet and MultiNet share the same
