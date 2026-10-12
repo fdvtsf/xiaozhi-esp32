@@ -45,8 +45,10 @@ ES8311 使用驱动默认地址，ES7210 使用 codec API 的 `0x82` 地址表�
 | RESET | 42 |
 | 背光 PWM | **20** |
 
-默认方向跟随工厂例程 `Normal`：X/Y 镜像均开启，不交换 XY，Y 偏移 80。
-偏移仅传给 `SpiLcdDisplay`，不要再额外调用 `esp_lcd_panel_set_gap` 加同样偏移。
+当前方向在工厂坐标基础上旋转 90° 并做最终画面水平镜像：不启用 X/Y
+镜像位、交换 XY，X/Y 偏移均为 0。此方向的可视窗口是 X=0..239；若恢复
+另一镜像方向才需要 X 偏移 80。偏移仅传给 `SpiLcdDisplay`，不要再额外调用
+`esp_lcd_panel_set_gap` 加同样偏移。
 若改变方向，需要同时复测偏移、裁切和文字方向。
 
 ## 与原 HoloMate 的一致性
@@ -199,18 +201,21 @@ DAC → 模块板载模拟回路 → ES7210 MIC3。实现方式参考微雪
 ### 官方发布入口
 
 ```powershell
-python scripts/release.py waveshare/holomate-waveshare-s3-lcd-1.3 --name holomate-waveshare-s3-lcd-1.3
+python scripts/build.py waveshare/holomate-waveshare-s3-lcd-1.3 --name holomate-waveshare-s3-lcd-1.3
 ```
 
 这是标准发布入口，会更新工程根目录 `sdkconfig` 和默认 `build/`；开发时若需要
 保留旧板构建状态，优先使用上面的独立目录脚本。Windows 环境建议设置
 `CMAKE_NINJA_FORCE_RESPONSE_FILE=ON` 后再使用发布入口。
+专用脚本的 `LOCAL_PROFILE` 保留当前本地唤醒模型和 Flash 布局，并检查
+官方的 AFE/LVGL 内存优化设置；`config.json` 只列硬件和板级功能。
 
 ### 烧录（仅在确认端口及接线后）
 
 ```powershell
 idf.py -B build-holomate-waveshare-idf6 -p COMx flash
-idf.py -B build-holomate-waveshare-idf6 -p COMx monitor
+# 后续只更新代码，保留设备现有表情、字体和唤醒模型：
+idf.py -B build-holomate-waveshare-idf6 -p COMx app-flash
 ```
 
 将 `COMx` 替换为本块 CH343P 的实际端口，不沿用旧 HoloMate 的端口号。

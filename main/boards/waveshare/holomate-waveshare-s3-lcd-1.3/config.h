@@ -39,10 +39,13 @@
 #define DISPLAY_HEIGHT 240
 
 // Rotate the factory orientation clockwise by 90 degrees in the ST7789
-// controller. Swapping axes also moves the 80-pixel RAM offset from Y to X.
+// controller, then mirror the final image horizontally for the installed LCD
+// orientation. With XY swapped, the controller's Y mirror is the final
+// horizontal mirror seen by the user. In this mirrored direction the visible
+// 240-pixel window starts at X=0 (the opposite direction uses X=80).
 #define DISPLAY_MIRROR_X false
-#define DISPLAY_MIRROR_Y true
+#define DISPLAY_MIRROR_Y false
 #define DISPLAY_SWAP_XY true
-#define DISPLAY_OFFSET_X 80
+#define DISPLAY_OFFSET_X 0
 #define DISPLAY_OFFSET_Y 0
 #define DISPLAY_INVERT_COLOR true

@@ -937,7 +937,8 @@ endif()
 if(NOT BOARD_MANUFACTURER AND BOARD_DIR MATCHES "^([^/]+)/")
     set(BOARD_MANUFACTURER "${CMAKE_MATCH_1}")
 endif()
-if(NOT CMAKE_BUILD_EARLY_EXPANSION AND NOT BOARD_TYPE MATCHES "^[a-z0-9.-]+$")
+# Preserve the original HoloMate's published mixed-case identity.
+if(NOT CMAKE_BUILD_EARLY_EXPANSION AND NOT CONFIG_BOARD_TYPE_HOLOMATE AND NOT BOARD_TYPE MATCHES "^[a-z0-9.-]+$")
     message(FATAL_ERROR
         "Invalid BOARD_TYPE '${BOARD_TYPE}': only lowercase letters, digits, '.' and '-' are allowed"
     )
@@ -1174,7 +1175,7 @@ endif()
 if(NOT BOARD_NAME)
     set(BOARD_NAME ${BOARD_TYPE})
 endif()
-if(NOT CMAKE_BUILD_EARLY_EXPANSION AND NOT BOARD_NAME MATCHES "^[a-z0-9.-]+$")
+if(NOT CMAKE_BUILD_EARLY_EXPANSION AND NOT CONFIG_BOARD_TYPE_HOLOMATE AND NOT BOARD_NAME MATCHES "^[a-z0-9.-]+$")
     message(FATAL_ERROR
         "Invalid BOARD_NAME '${BOARD_NAME}': only lowercase letters, digits, '.' and '-' are allowed"
     )

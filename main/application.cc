@@ -552,13 +552,9 @@ void Application::InitializeProtocol() {
         protocol_ = std::make_unique<MqttProtocol>();
     }
 
-    protocol_->OnConnected([this]() {
-        Schedule([this]() { HandleProtocolConnected(); });
-    });
+    protocol_->OnConnected([this]() { Schedule([this]() { HandleProtocolConnected(); }); });
 
-    protocol_->OnDisconnected([this]() {
-        Schedule([this]() { HandleProtocolDisconnected(); });
-    });
+    protocol_->OnDisconnected([this]() { Schedule([this]() { HandleProtocolDisconnected(); }); });
 
     protocol_->OnNetworkError([this](const std::string& message) {
         last_error_message_ = message;
@@ -722,10 +718,9 @@ void Application::InitializeProtocol() {
             if (cJSON_IsObject(payload)) {
                 CJsonStringUniquePtr payload_json(cJSON_PrintUnformatted(payload));
                 if (payload_json) {
-                    Schedule(
-                        [this, display, payload_str = std::string(payload_json.get())]() {
-                            display->SetChatMessage("system", payload_str.c_str());
-                        });
+                    Schedule([this, display, payload_str = std::string(payload_json.get())]() {
+                        display->SetChatMessage("system", payload_str.c_str());
+                    });
                 }
             } else {
                 ESP_LOGW(TAG, "Invalid custom message format: missing payload");
@@ -798,8 +793,7 @@ void Application::ContinueConversationRecovery() {
     conversation_recovery_pending_ = false;
     play_popup_on_listening_ = false;
     ESP_LOGI(TAG, "Conversation recovered automatically: interrupted=%s, mode=%d",
-             DeviceStateMachine::GetStateName(interrupted_state),
-             static_cast<int>(recovered_mode));
+             DeviceStateMachine::GetStateName(interrupted_state), static_cast<int>(recovered_mode));
     SetListeningMode(recovered_mode);
 }
 

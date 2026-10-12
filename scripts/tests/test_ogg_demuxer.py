@@ -1,5 +1,6 @@
 import os
 import shlex
+import shutil
 import subprocess
 import tempfile
 import textwrap
@@ -12,6 +13,10 @@ DEMUXER = ROOT / "main" / "audio" / "demuxer"
 
 
 class OggDemuxerTest(unittest.TestCase):
+    @unittest.skipUnless(
+        shutil.which(shlex.split(os.environ.get("CXX", "c++"))[0]),
+        "requires a host C++ compiler",
+    )
     def test_zero_length_lace_is_processed_without_more_input(self):
         driver = r"""
             #include <algorithm>

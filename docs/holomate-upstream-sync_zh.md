@@ -30,7 +30,7 @@ git status
 git rev-parse --is-shallow-repository
 ```
 
-建议在网络正常时补全历史，以便后续 rebase 和冲突分析：
+建议在网络正常时补全历史，以便后续合并和冲突分析：
 
 ```powershell
 git fetch upstream --unshallow
@@ -54,29 +54,31 @@ git status
 如果有尚未完成的修改，应先提交；临时修改也可以先保存：
 
 ```powershell
-git stash push -u -m "work before upstream sync"
+git stash push -m "work before upstream sync"
 ```
 
-获取官方更新，并将 HoloMate 提交重新应用到最新版官方代码之上：
+获取官方更新，并合并到 HoloMate 分支。该分支已发布到个人 Fork，
+使用 merge 保留双方历史，后续推送不需要重写远程提交：
 
 ```powershell
 git fetch upstream
-git rebase upstream/main
+git merge --no-ff upstream/main
 ```
 
 同步完成后建议编译验证：
 
 ```powershell
-idf.py -D SDKCONFIG_DEFAULTS="sdkconfig.defaults;sdkconfig.defaults.esp32s3;sdkconfig.holomate.defaults" build
+& 'C:\Users\fh\.codex\skills\build-flash-holomate\scripts\Build-Flash-HoloMate-Waveshare.ps1'
 ```
 
-如果同步前使用了 stash，可在 rebase 完成后恢复：
+如果同步前使用了 stash，可在合并完成后恢复。使用 apply 保留备份，
+确认恢复和编译无误后再删除对应的 stash：
 
 ```powershell
-git stash pop
+git stash apply
 ```
 
-## 处理 rebase 冲突
+## 处理合并冲突
 
 发生冲突时先查看文件：
 
@@ -88,21 +90,28 @@ git status
 
 ```powershell
 git add <已解决的文件>
-git rebase --continue
+git commit
 ```
 
 如果本次同步不应继续，可以完整取消并回到同步前：
 
 ```powershell
-git rebase --abort
+git merge --abort
 ```
 
 HoloMate 最可能出现冲突的位置：
 
-- `main/CMakeLists.txt`：HoloMate 板型到 `main/boards/holoMate` 的映射。
+- `main/CMakeLists.txt`：用 `BOARD_DIR` 映射原 HoloMate 和微雪适配板的源码目录。
 - `main/Kconfig.projbuild`：HoloMate 板型选项和设备端 AEC 依赖。
 - `main/boards/holoMate/`：HoloMate GPIO、音频 Codec 和板级初始化。
 - `sdkconfig.holomate.defaults`：HoloMate 板型选择及 `CONFIG_USE_DEVICE_AEC=y`。
+- `main/audio/engines/afe_audio_engine.*`：保留 MMR、AEC NORMAL 和 AGC 配置，接入官方内存与模型修复。
+- `main/application.*` / `main/protocols/`：保留异常断线恢复，合入协议校验和队列修复。
+- `scripts/build_holomate_waveshare.py`：调用官方 `scripts/build.py` 的版本检测。
+
+微雪适配板的 `config.json` 固定 `type=holomate-waveshare-s3-lcd-1.3`，
+不要让目录前缀改变上报的 OTA 板型。专用构建脚本中的 `LOCAL_PROFILE`
+保留本地默认唤醒模型、Flash 布局及官方 SRAM/PSRAM 内存配置。
 
 处理冲突时，应保留官方对公共框架的更新，再把 HoloMate 所需的最小配置接入新版结构，
 不要直接用旧文件覆盖官方新文件。
@@ -116,13 +125,13 @@ git remote add origin https://github.com/<你的用户名>/xiaozhi-esp32.git
 git push -u origin holomate
 ```
 
-因为 rebase 会重写 `holomate` 分支提交，后续同步官方后应使用：
+合并并验证后，使用普通推送：
 
 ```powershell
-git push --force-with-lease origin holomate
+git push origin holomate
 ```
 
-不要使用普通的 `--force`，`--force-with-lease` 会在远程分支出现未知新提交时拒绝覆盖。
+本流程保留已有历史，无需强制推送。
 
 ## 推荐的完整同步流程
 
@@ -130,9 +139,9 @@ git push --force-with-lease origin holomate
 git switch holomate
 git status
 git fetch upstream
-git rebase upstream/main
-idf.py -D SDKCONFIG_DEFAULTS="sdkconfig.defaults;sdkconfig.defaults.esp32s3;sdkconfig.holomate.defaults" build
-git push --force-with-lease origin holomate
+git merge --no-ff upstream/main
+& 'C:\Users\fh\.codex\skills\build-flash-holomate\scripts\Build-Flash-HoloMate-Waveshare.ps1'
+git push origin holomate
 ```
 
 如果没有配置个人 Fork，则省略最后一条 `git push`。
@@ -152,6 +161,20 @@ git diff
 - `build/`、`build-holomate-*` 等编译目录。
 - 项目根目录的 `sdkconfig`。
 - 串口日志、临时脚本和本地 Python 虚拟环境。
+- `captures/` 音频抓取文件（已加入 `.gitignore`）。
+
+## 2026-10-12 同步基线
+
+本次合入官方 `bb1c094`（v2.5.2 发布后的 main），保留 HoloMate 的
+ESP-SR 2.5.5、双麦 MMR、36 dB 增益、AEC NORMAL、AGC 和镜像字幕。
+本机继续使用官方支持的 ESP-IDF 6.0.2；官方最低要求为 6.0.1。
+
+主机回归测试用 ESP-IDF Python 的 UTF-8 模式运行；Windows 下将已有的
+Git Bash 加入 PATH，以运行 CI 路径筛选测试。缺少主机 C++ 编译器时，
+对应的 Ogg/ESP-VoCat 主机测试会明确跳过；固件编译和物理音频测试是独立验证。
+
+正常代码烧录继续使用 `app-flash`，保留设备上的自定义 assets；只有资源、
+模型或分区布局变化且确实需要更新时，才单独评估完整烧录。
 
 板级功能应尽量限制在 `main/boards/holoMate/` 和专用默认配置中；只有官方构建系统需要
 识别 HoloMate 时，才修改公共的 `main/CMakeLists.txt` 或 `main/Kconfig.projbuild`。

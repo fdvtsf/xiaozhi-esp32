@@ -5,8 +5,8 @@
 #include "display/lcd_display.h"
 #include "wifi_board.h"
 
-#include <driver/i2c_master.h>
 #include <driver/gpio.h>
+#include <driver/i2c_master.h>
 #include <driver/spi_common.h>
 #include <driver/temperature_sensor.h>
 #include <esp_lcd_panel_io.h>
@@ -66,7 +66,7 @@ int ThermalCpuFrequency(ThermalProtectionLevel level) {
             return 240;
     }
 }
-}
+}  // namespace
 
 class HoloMateWaveshareDisplay : public SpiLcdDisplay {
 public:
@@ -79,9 +79,8 @@ public:
     void SetupUI() override {
         SpiLcdDisplay::SetupUI();
 
-        // This board is an expression-only display. Keep all text and status UI
-        // hidden and let the emotion image use every pixel of the LCD.
-        SetHideSubtitle(true);
+        // Keep the status overlays hidden and let the emotion image use the
+        // display. Chat subtitles remain available at the bottom of the LCD.
         DisplayLockGuard lock(this);
         HideUiOverlays();
         ConfigureFullscreenEmotion();
@@ -99,8 +98,7 @@ public:
     }
 
     void SetChatMessage(const char* role, const char* content) override {
-        (void)role;
-        (void)content;
+        SpiLcdDisplay::SetChatMessage(role, content);
     }
 
     void SetStatus(const char* status) override { (void)status; }
@@ -120,9 +118,9 @@ public:
 private:
     void HideUiOverlays() {
         lv_obj_t* overlays[] = {
-            top_bar_,       status_bar_,        bottom_bar_,         emoji_label_,
-            network_label_, status_label_,      notification_label_, mute_label_,
-            battery_label_, low_battery_popup_, low_battery_label_,
+            top_bar_,           status_bar_,         emoji_label_, network_label_,
+            status_label_,      notification_label_, mute_label_,  battery_label_,
+            low_battery_popup_, low_battery_label_,
         };
         for (auto* overlay : overlays) {
             if (overlay != nullptr) {
@@ -168,8 +166,7 @@ private:
         };
         const esp_err_t err = esp_pm_configure(&pm_config);
         if (err != ESP_OK) {
-            ESP_LOGE(TAG, "Thermal CPU limit failed at %.1f C: %s", celsius,
-                     esp_err_to_name(err));
+            ESP_LOGE(TAG, "Thermal CPU limit failed at %.1f C: %s", celsius, esp_err_to_name(err));
             return false;
         }
         thermal_level_ = level;
@@ -217,9 +214,8 @@ private:
                 break;
             case ThermalProtectionLevel::Critical:
                 if (celsius <= kThermalCriticalOffC) {
-                    target = celsius >= kThermalThrottleOnC
-                                 ? ThermalProtectionLevel::Throttled
-                                 : ThermalProtectionLevel::Normal;
+                    target = celsius >= kThermalThrottleOnC ? ThermalProtectionLevel::Throttled
+                                                            : ThermalProtectionLevel::Normal;
                 }
                 break;
         }
@@ -254,8 +250,7 @@ private:
             return;
         }
         chip_temperature_.store(celsius);
-        ESP_LOGI(TAG, "ESP32-S3 internal temperature: %.1f C (not enclosure temperature)",
-                 celsius);
+        ESP_LOGI(TAG, "ESP32-S3 internal temperature: %.1f C (not enclosure temperature)", celsius);
         UpdateThermalProtection(celsius);
     }
 

@@ -8,8 +8,6 @@
             "idf_version": ">=6.0.1",
             "sdkconfig_append": [
                 "CONFIG_BOARD_TYPE_HOLOMATE_WAVESHARE_S3_LCD_1_3=y",
-                "CONFIG_ESPTOOLPY_FLASHSIZE_16MB=y",
-                "CONFIG_PARTITION_TABLE_CUSTOM_FILENAME=\"partitions/v2/16m.csv\"",
                 "CONFIG_SPIRAM=y",
                 "CONFIG_SPIRAM_MODE_OCT=y",
                 "CONFIG_SPIRAM_SPEED_80M=y",
@@ -21,8 +19,6 @@
                 "CONFIG_USE_AFE_WAKE_WORD=y",
                 "CONFIG_DISABLE_AEC_DURING_IDLE_WAKE=n",
                 "CONFIG_SEND_WAKE_WORD_DATA=y",
-                "CONFIG_SR_WN_WN9_NIHAOXIAOZHI_TTS=n",
-                "CONFIG_SR_WN_WN9_JARVIS_TTS=y",
                 "CONFIG_USE_DEFAULT_MESSAGE_STYLE=y",
                 "CONFIG_ESP_CONSOLE_UART_DEFAULT=y",
                 "CONFIG_ESP_CONSOLE_SECONDARY_NONE=y",

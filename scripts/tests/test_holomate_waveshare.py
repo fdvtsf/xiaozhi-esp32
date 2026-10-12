@@ -219,9 +219,9 @@ class HoloMateWaveshareTests(unittest.TestCase):
         self.assertIn("#define AUDIO_INPUT_MIC2_SLOT 2", header)
         self.assertIn("#define AUDIO_INPUT_REFERENCE_SLOT 1", header)
         self.assertIn("#define DISPLAY_MIRROR_X false", header)
-        self.assertIn("#define DISPLAY_MIRROR_Y true", header)
+        self.assertIn("#define DISPLAY_MIRROR_Y false", header)
         self.assertIn("#define DISPLAY_SWAP_XY true", header)
-        self.assertIn("#define DISPLAY_OFFSET_X 80", header)
+        self.assertIn("#define DISPLAY_OFFSET_X 0", header)
         self.assertIn("#define DISPLAY_OFFSET_Y 0", header)
         source = (BOARD_DIR / "holomate_waveshare_board.cc").read_text(encoding="utf-8")
         self.assertEqual(source.count("DECLARE_BOARD("), 1)
@@ -246,14 +246,14 @@ class HoloMateWaveshareTests(unittest.TestCase):
         self.assertIn("dual_mic_with_reference ? AFE_MODE_LOW_COST : AFE_MODE_HIGH_PERF",
                       afe_source)
 
-    def test_expression_only_fullscreen_display(self):
+    def test_fullscreen_emotion_display_with_subtitles(self):
         source = (BOARD_DIR / "holomate_waveshare_board.cc").read_text(encoding="utf-8")
         self.assertIn("class HoloMateWaveshareDisplay : public SpiLcdDisplay", source)
-        self.assertIn("SetHideSubtitle(true)", source)
         self.assertIn("void SetChatMessage(const char* role, const char* content) override", source)
+        self.assertIn("SpiLcdDisplay::SetChatMessage(role, content)", source)
         self.assertIn("void SetStatus(const char* status) override", source)
         self.assertIn("void UpdateStatusBar(bool update_all = false) override", source)
-        for member in ("top_bar_", "status_bar_", "bottom_bar_", "emoji_label_",
+        for member in ("top_bar_", "status_bar_", "emoji_label_",
                        "network_label_", "mute_label_", "battery_label_",
                        "low_battery_popup_"):
             self.assertIn(member, source)
@@ -267,7 +267,8 @@ class HoloMateWaveshareTests(unittest.TestCase):
         self.assertEqual(config["manufacturer"], "waveshare")
         self.assertEqual(config["target"], "esp32s3")
         cmake = (ROOT / "main/CMakeLists.txt").read_text(encoding="utf-8")
-        self.assertIn(f'set(BOARD_TYPE "{builder.BOARD}")', cmake)
+        self.assertIn(f'set(BOARD_DIR "waveshare/{builder.BOARD}")', cmake)
+        self.assertEqual(config["type"], builder.BOARD)
         kconfig = (ROOT / "main/Kconfig.projbuild").read_text(encoding="utf-8")
         symbol = "BOARD_TYPE_HOLOMATE_WAVESHARE_S3_LCD_1_3"
         self.assertIn(f"config {symbol}", kconfig)

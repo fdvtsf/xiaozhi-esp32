@@ -25,8 +25,20 @@ The current MMR A/B test explicitly sets `AEC_NLP_LEVEL_NORMAL`, replacing
 the previously observed `AGGR` default; no other acoustic settings change.
 Other input layouts use the existing VC/HIGH_PERF profile with
 `AEC_MODE_VOIP_HIGH_PERF` and `AEC_NLP_LEVEL_NORMAL` overrides.
-Standalone NS and AGC are explicitly disabled. Do not infer current MMR NLP
-strength from older single-microphone tuning or documentation.
+Standalone NS remains disabled; AGC is enabled for the current A/B experiment.
+ESP-SR is pinned to `2.5.5` to evaluate its newer BSS implementation while
+keeping the explicit MMR, AEC NLP, microphone gain, VAD and AGC settings intact.
+The library's profile defaults can still change across versions; verify the
+startup configuration and pipeline before comparing physical audio tests.
+In the integrated AFE, `afe_config_check()` prioritizes dual-mic SE/BSS over
+NS when the algorithms conflict. Disabling SE falls back to the first mic;
+setting `ns_init=true` alone does not add a second denoising stage after BSS.
+The 2.5.5 upgrade was compiled for `holomate-waveshare-s3-lcd-1.3` on
+ESP-IDF 6.0.2, with 43 host regression tests passing. Wake/ASR quality,
+the deployed model assets, interruption and reconnect still require a physical
+device test; a successful build does not establish acoustic improvement.
+Do not infer current MMR NLP strength from older single-microphone tuning or
+documentation.
 
 At initialization, `AFE init config` logs AEC mode, NLP level, filter length,
 and AEC/SE/NS/AGC flags from the configuration object after creation. These

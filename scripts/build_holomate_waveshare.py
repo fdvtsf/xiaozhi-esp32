@@ -20,6 +20,21 @@ DEFAULT_BUILD = "build-holomate-waveshare-idf6"
 DIAGNOSTIC_BUILD = "build-holomate-waveshare-idf6-diagnostics"
 TDM_MAP_BUILD = "build-holomate-waveshare-idf6-tdm-map"
 
+# The local firmware profile keeps the existing model and flash layout; upstream
+# config.json describes hardware only. Also validate the SRAM-saving defaults
+# so an old generated sdkconfig cannot silently disable upstream memory fixes.
+LOCAL_PROFILE = {
+    "CONFIG_ESPTOOLPY_FLASHSIZE_16MB": "y",
+    "CONFIG_PARTITION_TABLE_CUSTOM_FILENAME": '"partitions/v2/16m.csv"',
+    "CONFIG_SR_WN_WN9_NIHAOXIAOZHI_TTS": "n",
+    "CONFIG_SR_WN_WN9_JARVIS_TTS": "y",
+    "CONFIG_SPIRAM_MALLOC_ALWAYSINTERNAL": "1024",
+    "CONFIG_SPIRAM_MALLOC_RESERVE_INTERNAL": "102400",
+    "CONFIG_LV_USE_BUILTIN_MALLOC": "y",
+    "CONFIG_LV_USE_CLIB_MALLOC": "n",
+    "CONFIG_LV_MEM_SIZE_KILOBYTES": "1024",
+}
+
 
 def validate_pcm_server(value):
     host, separator, port_text = value.rpartition(":")
@@ -37,6 +52,7 @@ def load_settings(audio_diagnostics=False, pcm_server=None, tdm_map=False):
     config = json.loads(CONFIG.read_text(encoding="utf-8"))
     build = next(item for item in config["builds"] if item["name"] == BOARD)
     settings = dict(line.split("=", 1) for line in build["sdkconfig_append"])
+    settings.update(LOCAL_PROFILE)
     settings["CONFIG_AUDIO_DIAGNOSTICS"] = "y" if audio_diagnostics or pcm_server or tdm_map else "n"
     settings["CONFIG_AUDIO_DIAGNOSTIC_PCM_UDP"] = "y" if pcm_server else "n"
     settings["CONFIG_AUDIO_DIAGNOSTIC_TDM_SLOTS"] = "y" if tdm_map else "n"

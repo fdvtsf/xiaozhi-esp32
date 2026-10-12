@@ -180,9 +180,9 @@ class WorkflowDiffTests(unittest.TestCase):
         env = dict(os.environ)
         env.update({
             "EVENT_NAME": event, "BEFORE_SHA": before or self.base,
-            "GITHUB_REF": ref, "GITHUB_WORKSPACE": str(self.root),
-            "GITHUB_OUTPUT": str(output), "RUNNER_TEMP": str(self.root),
-            "GIT_CONFIG_GLOBAL": str(self.root / "gitconfig"),
+            "GITHUB_REF": ref, "GITHUB_WORKSPACE": self.root.as_posix(),
+            "GITHUB_OUTPUT": output.as_posix(), "RUNNER_TEMP": self.root.as_posix(),
+            "GIT_CONFIG_GLOBAL": (self.root / "gitconfig").as_posix(),
         })
         subprocess.run(
             ["bash", "--noprofile", "--norc", "-e", "-o", "pipefail", "-c", self.script],

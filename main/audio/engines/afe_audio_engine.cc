@@ -193,8 +193,7 @@ bool AfeAudioEngine::Initialize(AudioCodec* codec, int frame_duration_ms,
     // profile for the single-microphone boards.
     const bool dual_mic_with_reference = input_format == "MMR";
     const afe_type_t afe_type = dual_mic_with_reference ? AFE_TYPE_FD : AFE_TYPE_VC;
-    const afe_mode_t afe_mode =
-        dual_mic_with_reference ? AFE_MODE_LOW_COST : AFE_MODE_HIGH_PERF;
+    const afe_mode_t afe_mode = dual_mic_with_reference ? AFE_MODE_LOW_COST : AFE_MODE_HIGH_PERF;
     ESP_LOGI(TAG, "AFE profile: type=%s, mode=%s", dual_mic_with_reference ? "FD" : "VC",
              dual_mic_with_reference ? "LOW_COST" : "HIGH_PERF");
     afe_config_t* afe_config = afe_config_init(input_format.c_str(), models_, afe_type, afe_mode);
@@ -239,7 +238,10 @@ bool AfeAudioEngine::Initialize(AudioCodec* codec, int frame_duration_ms,
             afe_config->wakenet_model_name_2 = wakenet_models[1];
         }
     }
-    afe_config->agc_init = false;
+    // Enable AFE AGC for this experiment. Keep the hardware input gain and
+    // all other acoustic parameters unchanged so the A/B result is attributable
+    // to AGC only.
+    afe_config->agc_init = true;
     afe_config->memory_alloc_mode = AFE_MEMORY_ALLOC_MORE_PSRAM;
 
     ESP_LOGI(TAG, "Before AFE create: free=%u min=%u largest=%u",
@@ -257,8 +259,7 @@ bool AfeAudioEngine::Initialize(AudioCodec* codec, int frame_duration_ms,
                  "AFE init config: aec_init=%d aec_mode=%s(%d) aec_nlp_level=%s(%d) "
                  "aec_filter_length=%d se_init=%d ns_init=%d agc_init=%d",
                  afe_config->aec_init, AecModeName(afe_config->aec_mode),
-                 static_cast<int>(afe_config->aec_mode),
-                 AecNlpLevelName(afe_config->aec_nlp_level),
+                 static_cast<int>(afe_config->aec_mode), AecNlpLevelName(afe_config->aec_nlp_level),
                  static_cast<int>(afe_config->aec_nlp_level), afe_config->aec_filter_length,
                  afe_config->se_init, afe_config->ns_init, afe_config->agc_init);
     }
@@ -278,8 +279,8 @@ bool AfeAudioEngine::Initialize(AudioCodec* codec, int frame_duration_ms,
     const int feed_rate = afe_iface_->get_samp_rate(afe_data_);
     const int feed_frames = afe_iface_->get_feed_chunksize(afe_data_);
     const int fetch_frames = afe_iface_->get_fetch_chunksize(afe_data_);
-    if (feed_channels <= 0 || feed_channels != codec_->input_channels() ||
-        feed_rate != 16000 || feed_frames <= 0 || fetch_frames <= 0) {
+    if (feed_channels <= 0 || feed_channels != codec_->input_channels() || feed_rate != 16000 ||
+        feed_frames <= 0 || fetch_frames <= 0) {
         ESP_LOGE(TAG,
                  "AFE input contract mismatch: channels=%d expected=%d rate=%d expected=16000 "
                  "feed_frames=%d fetch_frames=%d",
