@@ -6,6 +6,7 @@
 #include <cassert>
 #include <cstring>
 #include <sstream>
+#include <vector>
 
 #include <esp_heap_caps.h>
 #include <esp_log.h>
@@ -73,6 +74,12 @@ AfeAudioEngine::~AfeAudioEngine() {
     if (afe_data_ != nullptr) {
         afe_iface_->destroy(afe_data_);
     }
+    if (processing_task_stack_ != nullptr) {
+        heap_caps_free(processing_task_stack_);
+    }
+    if (processing_task_buffer_ != nullptr) {
+        heap_caps_free(processing_task_buffer_);
+    }
     if (wake_word_encode_task_stack_ != nullptr) {
         heap_caps_free(wake_word_encode_task_stack_);
     }
@@ -138,12 +145,21 @@ bool AfeAudioEngine::Initialize(AudioCodec* codec, int frame_duration_ms,
         }
     } else if (wakenet_model_name != nullptr) {
         wake_detector_ = WakeDetector::kWakeNet;
-        auto words = esp_srmodel_get_wake_words(models_, wakenet_model_name);
-        if (words != nullptr) {
+        for (int i = 0; i < models_->num; ++i) {
+            char* name = models_->model_name[i];
+            if (name == nullptr || strncmp(name, ESP_WN_PREFIX, strlen(ESP_WN_PREFIX)) != 0) {
+                continue;
+            }
+            auto words = esp_srmodel_get_wake_words(models_, name);
+            if (words == nullptr) {
+                continue;
+            }
             std::stringstream stream(words);
             std::string word;
             while (std::getline(stream, word, ';')) {
-                wake_words_.push_back(word);
+                if (!word.empty()) {
+                    wake_words_.push_back(word);
+                }
             }
         }
 #if CONFIG_SEND_WAKE_WORD_DATA
@@ -206,11 +222,30 @@ bool AfeAudioEngine::Initialize(AudioCodec* codec, int frame_duration_ms,
         afe_config->vad_model_name = vad_model_name;
     }
     afe_config->wakenet_init = wake_detector_ == WakeDetector::kWakeNet;
-    afe_config->wakenet_model_name =
-        wake_detector_ == WakeDetector::kWakeNet ? wakenet_model_name : nullptr;
+    afe_config->wakenet_model_name = nullptr;
+    afe_config->wakenet_model_name_2 = nullptr;
+    if (wake_detector_ == WakeDetector::kWakeNet && models_ != nullptr) {
+        std::vector<char*> wakenet_models;
+        for (int i = 0; i < models_->num; ++i) {
+            char* name = models_->model_name[i];
+            if (name != nullptr && strncmp(name, ESP_WN_PREFIX, strlen(ESP_WN_PREFIX)) == 0) {
+                wakenet_models.push_back(name);
+            }
+        }
+        if (!wakenet_models.empty()) {
+            afe_config->wakenet_model_name = wakenet_models[0];
+        }
+        if (wakenet_models.size() > 1) {
+            afe_config->wakenet_model_name_2 = wakenet_models[1];
+        }
+    }
     afe_config->agc_init = false;
     afe_config->memory_alloc_mode = AFE_MEMORY_ALLOC_MORE_PSRAM;
 
+    ESP_LOGI(TAG, "Before AFE create: free=%u min=%u largest=%u",
+             heap_caps_get_free_size(MALLOC_CAP_INTERNAL),
+             heap_caps_get_minimum_free_size(MALLOC_CAP_INTERNAL),
+             heap_caps_get_largest_free_block(MALLOC_CAP_INTERNAL));
     afe_iface_ = esp_afe_handle_from_config(afe_config);
     if (afe_iface_ != nullptr) {
         afe_data_ = afe_iface_->create_from_config(afe_config);
@@ -267,15 +302,34 @@ bool AfeAudioEngine::Initialize(AudioCodec* codec, int frame_duration_ms,
     }
     afe_iface_->print_pipeline(afe_data_);
 
-    BaseType_t task_created = xTaskCreate(
+    if (processing_task_stack_ == nullptr) {
+        processing_task_stack_ = static_cast<StackType_t*>(
+            heap_caps_malloc(kProcessingTaskStackSize, MALLOC_CAP_SPIRAM));
+    }
+    if (processing_task_buffer_ == nullptr) {
+        processing_task_buffer_ =
+            static_cast<StaticTask_t*>(heap_caps_malloc(sizeof(StaticTask_t), MALLOC_CAP_INTERNAL));
+    }
+    if (processing_task_stack_ == nullptr || processing_task_buffer_ == nullptr) {
+        ESP_LOGE(TAG, "Failed to allocate AFE processing task memory");
+        afe_iface_->destroy(afe_data_);
+        afe_data_ = nullptr;
+        afe_iface_ = nullptr;
+        return false;
+    }
+
+    processing_task_ = xTaskCreateStatic(
         [](void* arg) {
             auto* engine = static_cast<AfeAudioEngine*>(arg);
             engine->ProcessingTask();
             vTaskDelete(nullptr);
         },
-        "audio_afe", 4096, this, 3, &processing_task_);
-    if (task_created != pdPASS) {
-        ESP_LOGE(TAG, "Failed to create AFE processing task");
+        "audio_afe", kProcessingTaskStackSize, this, 3, processing_task_stack_,
+        processing_task_buffer_);
+    if (processing_task_ == nullptr) {
+        ESP_LOGE(TAG, "Failed to create AFE processing task, internal free=%u largest=%u",
+                 heap_caps_get_free_size(MALLOC_CAP_INTERNAL),
+                 heap_caps_get_largest_free_block(MALLOC_CAP_INTERNAL));
         afe_iface_->destroy(afe_data_);
         afe_data_ = nullptr;
         afe_iface_ = nullptr;
@@ -287,6 +341,10 @@ bool AfeAudioEngine::Initialize(AudioCodec* codec, int frame_duration_ms,
                                : (wake_detector_ == WakeDetector::kMultiNet ? "MultiNet" : "none");
     ESP_LOGI(TAG, "Initialized FD AFE, detector: %s, NS: off, feed: %d, fetch: %d", detector,
              afe_iface_->get_feed_chunksize(afe_data_), afe_iface_->get_fetch_chunksize(afe_data_));
+    ESP_LOGI(TAG, "After AFE create: free=%u min=%u largest=%u",
+             heap_caps_get_free_size(MALLOC_CAP_INTERNAL),
+             heap_caps_get_minimum_free_size(MALLOC_CAP_INTERNAL),
+             heap_caps_get_largest_free_block(MALLOC_CAP_INTERNAL));
     return true;
 }
 

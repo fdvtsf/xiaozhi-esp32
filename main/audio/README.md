@@ -11,7 +11,7 @@ engine.
 
 | Target | Engine | Wake word | Uplink processing |
 | --- | --- | --- | --- |
-| ESP32-S3 / ESP32-P4 | `AfeAudioEngine` | WakeNet inside AFE, or MultiNet fed from AFE output | FD AEC + VAD when audio processing is enabled |
+| ESP32-S3 / ESP32-P4 / ESP32-S31 | `AfeAudioEngine` | WakeNet inside AFE, or MultiNet fed from AFE output | FD AEC + VAD when audio processing is enabled |
 | ESP32 / ESP32-C3 / ESP32-C5 / ESP32-C6 | `LiteAudioEngine` | Standalone WakeNet when configured | Raw mono PCM |
 
 `AfeAudioEngine` owns a single FD AFE instance. WakeNet and voice uplink share
@@ -49,6 +49,28 @@ concatenation buffer.
 
 ## Input data flow
 
+### Board input layouts
+
+Built-in boards default to one microphone: `M` without a playback reference, or
+`MR` when the codec supplies a playback reference. `R` must contain playback
+reference samples, not a second microphone. The channel declaration must match
+the interleaved PCM returned by the codec.
+
+Multiple-microphone input remains available for developer experiments; the AFE
+still derives its format from the codec's microphone and reference counts.
+For Box Lite, the final `BoxAudioCodecLite` constructor parameter is
+`microphone_channels`, defaulting to `1`. Pass `2` explicitly to test `MMR`
+with reference enabled, or `MM` without it. `EnableInput()` and `Read()` use this
+count for capture and interleaving. On ESP32-S31-Korvo-1, developers can change
+the board's `AUDIO_INPUT_CHANNELS` from `1` to `2` to test `MM`; its codec has no
+playback reference. Neither experimental layout is enabled in default builds.
+
+Single-microphone defaults do not imply that ESP-SR FD lacks dual-microphone
+support, or guarantee hardware operation. Validate capture, playback, wake/VAD,
+interruption, reconnect, and applicable AEC modes on the affected board before
+releasing a change. Box Lite's software playback reference also needs timing
+and concurrency validation.
+
 ```mermaid
 flowchart LR
     Mic[Microphone] --> Codec[AudioCodec]
@@ -84,7 +106,16 @@ flowchart LR
 - `AudioInputTask` reads codec input and feeds the selected engine.
 - `AudioOutputTask` drains decoded PCM to the codec output.
 - `OpusCodecTask` encodes uplink PCM and decodes downlink packets.
-- `AfeAudioEngine` has its own AFE fetch task on S3/P4.
+- `AfeAudioEngine` has its own AFE fetch task on S3/P4/S31.
 
 The audio power timer still enables and disables codec ADC/DAC channels based on
 activity; the engine refactor does not change that policy.
+
+## Queue and allocation policy
+
+The service queues use compile-time fixed-capacity storage. Their existing drop,
+wait, and playback-drain policies remain unchanged, but queue growth no longer
+allocates deque nodes. `AudioTask` values are stored directly, and Opus encoding
+writes into the packet payload instead of allocating a second temporary output
+buffer. Packet and PCM buffer pools should only be added after target-side heap
+and latency measurements justify their additional ownership complexity.

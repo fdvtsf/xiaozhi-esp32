@@ -90,7 +90,7 @@ class HoloMateWaveshareTests(unittest.TestCase):
                     mock.patch.dict(builder.os.environ, {"IDF_PATH": str(idf)}), \
                     mock.patch.object(builder.sys, "argv", ["builder", "--audio-diagnostics"]), \
                     mock.patch.dict(builder.sys.modules, {
-                        "release": SimpleNamespace(_detect_idf_version=lambda: (6, 0, 2))}), \
+                        "build": SimpleNamespace(_detect_idf_version=lambda: (6, 0, 2))}), \
                     mock.patch.object(builder.subprocess, "run", side_effect=fake_idf):
                 builder.main()
             self.assertFalse((root / builder.DEFAULT_BUILD).exists())
@@ -126,7 +126,7 @@ class HoloMateWaveshareTests(unittest.TestCase):
                     mock.patch.dict(builder.os.environ, {"IDF_PATH": str(idf)}), \
                     mock.patch.object(builder.sys, "argv", ["builder"]), \
                     mock.patch.dict(builder.sys.modules, {
-                        "release": SimpleNamespace(_detect_idf_version=lambda: (6, 0, 2))}), \
+                        "build": SimpleNamespace(_detect_idf_version=lambda: (6, 0, 2))}), \
                     mock.patch.object(builder.subprocess, "run", side_effect=fake_idf) as run:
                 builder.main()
 
@@ -174,7 +174,7 @@ class HoloMateWaveshareTests(unittest.TestCase):
                     mock.patch.dict(builder.os.environ, {"IDF_PATH": str(idf)}), \
                     mock.patch.object(builder.sys, "argv", ["build_holomate_waveshare.py"]), \
                     mock.patch.dict(builder.sys.modules, {
-                        "release": SimpleNamespace(_detect_idf_version=lambda: (6, 0, 2))}), \
+                        "build": SimpleNamespace(_detect_idf_version=lambda: (6, 0, 2))}), \
                     mock.patch.object(builder.subprocess, "run", side_effect=fake_idf) as run:
                 builder.main()
                 self.assertEqual([call.args[0][-1] for call in run.call_args_list],

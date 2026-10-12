@@ -4,7 +4,7 @@
 
 XiaoZhi is an ESP-IDF C/C++ voice-assistant firmware supporting many chips, boards, displays, audio devices, and network transports. A build selects exactly one board implementation.
 
-Use ESP-IDF v6.0.2 when possible. IDF 5.5.x is retained only for documented legacy boards.
+Use ESP-IDF v6.1 when possible. The minimum supported SDK is ESP-IDF v6.0.1. IDF 5.x is not supported.
 
 ## Architecture
 
@@ -18,7 +18,7 @@ Use ESP-IDF v6.0.2 when possible. IDF 5.5.x is retained only for documented lega
 - `main/mcp_server.*`: common device-side MCP tools and dispatch.
 - `main/Kconfig.projbuild`: board and feature configuration.
 - `main/CMakeLists.txt`: source, board, locale, font, and asset selection.
-- `scripts/release.py`: canonical board/variant build entry point.
+- `scripts/build.py`: canonical board/variant build entry point.
 
 Read the closest existing implementation before adding a new one. Prefer the narrowest owning layer; do not put board-specific behavior into core modules.
 
@@ -42,7 +42,7 @@ Read the closest existing implementation before adding a new one. Prefer the nar
 
 Board selection is a coupled chain:
 
-`config.json` -> `scripts/release.py` -> `main/Kconfig.projbuild` -> `main/CMakeLists.txt` -> board source and `config.h`.
+`config.json` -> `scripts/build.py` -> `main/Kconfig.projbuild` -> `main/CMakeLists.txt` -> board source and `config.h`.
 
 When adding a board or variant, update every relevant link in that chain. Include a unique board identity, correct chip target, flash/partition settings, exactly one `DECLARE_BOARD`, and board documentation. Follow `docs/custom-board.md`.
 
@@ -57,12 +57,12 @@ idf.py --version
 
 ```sh
 # Discover exact board and variant names
-python3 scripts/release.py --list-boards
+python3 scripts/build.py --list-boards
 
 # Canonical variant build
-python3 scripts/release.py <board-directory> --name <variant-name>
+python3 scripts/build.py <board-directory> --name <variant-name>
 
-# Host-side release tests
+# Host-side build tests
 python3 -m unittest discover -s scripts/tests -v
 
 # Format/check touched files
@@ -70,7 +70,7 @@ clang-format -i <files>
 clang-format --dry-run -Werror <files>
 ```
 
-The release script changes local `sdkconfig` and build state. Do not assume the build directory still represents a previous target.
+The build script changes local `sdkconfig` and build state. Do not assume the build directory still represents a previous target.
 
 ## Validation
 
@@ -84,7 +84,6 @@ The release script changes local `sdkconfig` and build state. Do not assume the 
 ## Authoritative Documentation
 
 - Overview and SDK policy: `README.md`
-- SDK compatibility: `docs/esp-idf-6-migration.md`
 - Board guide: `docs/custom-board.md`
 - Audio design: `main/audio/README.md`
 - Code style: `docs/code_style.md`

@@ -32,7 +32,7 @@ class AfeInitializationTests(unittest.TestCase):
                           'feed_channels != codec_->input_channels()',
                           'feed_rate != 16000', 'feed_frames <= 0', 'fetch_frames <= 0'):
             self.assertIn(condition, INIT)
-        self.assertLess(INIT.index('AFE input contract mismatch'), INIT.index('xTaskCreate('))
+        self.assertLess(INIT.index('AFE input contract mismatch'), INIT.index('xTaskCreateStatic('))
         self.assertLess(INIT.index('Failed to create FD AFE instance'),
                         INIT.index('const int feed_channels'))
 

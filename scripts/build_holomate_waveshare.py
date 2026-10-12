@@ -1,7 +1,7 @@
 """Build the HoloMate Waveshare variant without touching the old board's sdkconfig.
 
 Run with the ESP-IDF Python interpreter after activating ESP-IDF 6.0.2.
-config.json is the source of truth shared with scripts/release.py.
+config.json is the source of truth shared with scripts/build.py.
 """
 
 import argparse
@@ -113,10 +113,10 @@ def main():
     idf_path = os.environ.get("IDF_PATH")
     if not idf_path or not (Path(idf_path) / "tools/idf.py").is_file():
         parser.error("Activate ESP-IDF 6.0.2 first (export.ps1 / export.sh)")
-    # Use the release entry point's version detection / gating as well.
-    import release
-    if release._detect_idf_version() < (6, 0, 0):
-        parser.error("This board variant requires ESP-IDF >= 6.0; tested with 6.0.2")
+    # Use the upstream build entry point's version detection / gating as well.
+    import build
+    if build._detect_idf_version() < (6, 0, 1):
+        parser.error("This board variant requires ESP-IDF >= 6.0.1; tested with 6.0.2")
 
     settings = load_settings(args.audio_diagnostics, args.audio_pcm_server, args.audio_tdm_map)
     build_dir.mkdir(parents=True, exist_ok=True)
