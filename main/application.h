@@ -151,6 +151,7 @@ private:
     bool assets_version_checked_ = false;
     bool play_popup_on_listening_ = false;  // Flag to play popup sound after state changes to listening
     bool pending_listening_start_ = false;  // Waiting for playback to drain before starting listening (auto mode)
+    bool pending_assistant_subtitle_clear_ = false;  // Clear after the current TTS audio drains
     bool conversation_recovery_pending_ = false;
     ListeningMode recovery_listening_mode_ = kListeningModeAutoStop;
     DeviceState recovery_previous_state_ = kDeviceStateIdle;

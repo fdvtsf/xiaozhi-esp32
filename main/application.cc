@@ -216,13 +216,18 @@ void Application::Run() {
         }
 
         if (bits & MAIN_EVENT_PLAYBACK_DRAINED) {
-            if (audio_service_.IsPlaybackIdle()) {
+            const bool playback_idle = audio_service_.IsPlaybackIdle();
+            if (playback_idle) {
                 notify_player_.OnPlaybackDrained();
+                if (pending_assistant_subtitle_clear_) {
+                    pending_assistant_subtitle_clear_ = false;
+                    Board::GetInstance().GetDisplay()->SetChatMessage("assistant", "");
+                }
             }
             // Deferred listening start (auto mode): the playback queue has
             // drained, so it is now safe to enable voice processing.
             if (pending_listening_start_ && GetDeviceState() == kDeviceStateListening &&
-                audio_service_.IsPlaybackIdle()) {
+                playback_idle) {
                 pending_listening_start_ = false;
                 StartListeningAudio();
             }
@@ -632,18 +637,30 @@ void Application::InitializeProtocol() {
                 return;
             }
             if (strcmp(state->valuestring, "start") == 0) {
-                Schedule([this]() {
+                Schedule([this, display]() {
+                    // Remove the previous response before the new one begins. In
+                    // WeChat-style displays an empty message is intentionally a no-op.
+                    pending_assistant_subtitle_clear_ = false;
+                    display->SetChatMessage("assistant", "");
                     aborted_ = false;
                     SetDeviceState(kDeviceStateSpeaking);
                 });
             } else if (strcmp(state->valuestring, "stop") == 0) {
-                Schedule([this]() {
+                Schedule([this, display]() {
                     if (GetDeviceState() == kDeviceStateSpeaking) {
                         if (listening_mode_ == kListeningModeManualStop) {
                             SetDeviceState(kDeviceStateIdle);
                         } else {
                             SetDeviceState(kDeviceStateListening);
                         }
+                    }
+                    // STOP means the server has finished sending this response,
+                    // but decoded audio can still be queued locally. Keep the final
+                    // sentence visible until the speaker has actually drained.
+                    pending_assistant_subtitle_clear_ = true;
+                    if (audio_service_.IsPlaybackIdle()) {
+                        pending_assistant_subtitle_clear_ = false;
+                        display->SetChatMessage("assistant", "");
                     }
                 });
             } else if (strcmp(state->valuestring, "sentence_start") == 0) {
@@ -655,8 +672,9 @@ void Application::InitializeProtocol() {
                         glyphs.clear();
                     }
                     ESP_LOGI(TAG, "<< %s", text->valuestring);
-                    Schedule([display, message = std::string(text->valuestring),
+                    Schedule([this, display, message = std::string(text->valuestring),
                               glyphs = std::move(glyphs), bpp]() {
+                        pending_assistant_subtitle_clear_ = false;
                         display->AddTextGlyphs(glyphs, bpp);
                         display->SetChatMessage("assistant", message.c_str());
                     });
@@ -671,8 +689,11 @@ void Application::InitializeProtocol() {
                     glyphs.clear();
                 }
                 ESP_LOGI(TAG, ">> %s", text->valuestring);
-                Schedule([display, message = std::string(text->valuestring),
+                Schedule([this, display, message = std::string(text->valuestring),
                           glyphs = std::move(glyphs), bpp]() {
+                    // A newer user transcript must not be erased by a late drain
+                    // notification from the preceding assistant response.
+                    pending_assistant_subtitle_clear_ = false;
                     display->AddTextGlyphs(glyphs, bpp);
                     display->SetChatMessage("user", message.c_str());
                 });
@@ -1094,6 +1115,7 @@ void Application::HandleStateChangedEvent() {
     switch (new_state) {
         case kDeviceStateUnknown:
         case kDeviceStateIdle:
+            pending_assistant_subtitle_clear_ = false;
             // Keep a just-raised network error visible. SetDeviceState(idle)
             // queues STATE_CHANGED after Alert(), and the idle handler would
             // otherwise wipe the status, emotion, and chat message.

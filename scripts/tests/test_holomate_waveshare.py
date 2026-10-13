@@ -262,6 +262,24 @@ class HoloMateWaveshareTests(unittest.TestCase):
         self.assertIn("lv_image_set_inner_align(emoji_image_, LV_IMAGE_ALIGN_STRETCH)", source)
         self.assertIn("display_ = new HoloMateWaveshareDisplay", source)
 
+    def test_assistant_subtitle_clears_after_audio_drains(self):
+        header = (ROOT / "main/application.h").read_text(encoding="utf-8")
+        source = (ROOT / "main/application.cc").read_text(encoding="utf-8")
+        self.assertIn("bool pending_assistant_subtitle_clear_ = false", header)
+        playback_drained = source.split(
+            "if (bits & MAIN_EVENT_PLAYBACK_DRAINED)", 1)[1].split(
+                "if (bits & MAIN_EVENT_TOGGLE_CHAT)", 1)[0]
+        self.assertIn("pending_assistant_subtitle_clear_", playback_drained)
+        self.assertIn('SetChatMessage("assistant", "")', playback_drained)
+        tts_stop = source.split(
+            'strcmp(state->valuestring, "stop") == 0', 1)[1].split(
+                'strcmp(state->valuestring, "sentence_start") == 0', 1)[0]
+        self.assertIn("pending_assistant_subtitle_clear_ = true", tts_stop)
+        self.assertIn("audio_service_.IsPlaybackIdle()", tts_stop)
+        stt = source.split('strcmp(type->valuestring, "stt") == 0', 1)[1].split(
+            'strcmp(type->valuestring, "llm") == 0', 1)[0]
+        self.assertIn("pending_assistant_subtitle_clear_ = false", stt)
+
     def test_release_board_identity(self):
         config = json.loads(builder.CONFIG.read_text(encoding="utf-8"))
         self.assertEqual(config["manufacturer"], "waveshare")
